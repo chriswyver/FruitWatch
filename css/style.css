@@ -616,14 +616,14 @@ footer .foot-links ul { list-style: none; margin: 0; padding: 0; display: flex; 
   .hero .wrap { grid-template-columns: 1fr; }
 
   /* Hide bee image — it's inline in the alt-bg grid */
-  .alt-bg .wrap > div[style*="grid"] {
-    display: block;
+  .why-grid {
+    display: block !important;
   }
-  .alt-bg .wrap > div[style*="grid"] > img {
-    display: none;
+  .why-grid > img {
+    display: none !important;
   }
-  .alt-bg .wrap > div[style*="grid"] > div {
-    width: 100%;
+  .why-grid > div {
+    width: 100% !important;
   }
 
   /* Full width text */

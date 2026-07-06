@@ -134,11 +134,11 @@ function applyFilters(records, filters) {
 // ---------- Leaflet map ----------
 
 function initMap() {
-  leafletMap = L.map("leafletMap", { zoomControl: true }).setView([54.5, -3], 5);
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+  leafletMap = L.map("leafletMap", { zoomControl: true, maxZoom: 12 }).setView([54.5, -3], 5);
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
     attribution: '© <a href="https://carto.com/">CARTO</a>',
     subdomains: "abcd",
-    maxZoom: 19
+    maxZoom: 12
   }).addTo(leafletMap);
   markerLayer = L.layerGroup().addTo(leafletMap);
 }
