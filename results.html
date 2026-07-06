@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Results — FruitWatch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html">
+      <svg class="brand-mark" viewBox="0 0 32 32" fill="none">
+        <circle cx="16" cy="16" r="4.2" fill="#D4A24C"/>
+        <ellipse cx="16" cy="7" rx="5" ry="6.4" fill="#E8B4C8"/>
+        <ellipse cx="25" cy="16" rx="6.4" ry="5" fill="#E8B4C8"/>
+        <ellipse cx="16" cy="25" rx="5" ry="6.4" fill="#E8B4C8"/>
+        <ellipse cx="7" cy="16" rx="6.4" ry="5" fill="#E8B4C8"/>
+      </svg>
+      FruitWatch
+    </a>
+    <nav class="primary-nav">
+      <a href="index.html">About</a>
+      <a href="results.html" class="active">Results</a>
+      <a href="submit.html" class="cta">Submit a record</a>
+    </nav>
+  </div>
+</header>
+
+<section style="padding-bottom:0;">
+  <div class="wrap">
+    <span class="eyebrow">Live since 2021 · updated daily</span>
+    <h1 style="font-size:clamp(2rem,3.4vw,2.8rem);">What the records show</h1>
+    <p class="lede" style="max-width:60ch;">Every sighting submitted through FruitWatch feeds straight into this page. Records update automatically as new submissions come in.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+
+    <div class="panel filter-panel">
+      <h3>Filter records <span class="tag">independent or combined</span></h3>
+      <div class="filter-row">
+        <div class="filter-field">
+          <label for="filterFruit">Fruit</label>
+          <select id="filterFruit">
+            <option value="">All fruit</option>
+          </select>
+        </div>
+        <div class="filter-field">
+          <label for="filterVariety">Variety</label>
+          <select id="filterVariety">
+            <option value="">All varieties</option>
+          </select>
+        </div>
+        <div class="filter-field">
+          <label for="filterYear">Year</label>
+          <select id="filterYear">
+            <option value="">All years</option>
+          </select>
+        </div>
+        <div class="filter-field">
+          <label for="filterStage">Flowering stage</label>
+          <select id="filterStage">
+            <option value="">All stages</option>
+            <option value="Start of Flowering">A — Start of Flowering</option>
+            <option value="Peak Flowering">B — Peak Flowering</option>
+            <option value="End of Flowering">C — End of Flowering</option>
+          </select>
+        </div>
+        <div class="filter-field filter-actions">
+          <button class="btn btn-ghost" id="resetFilters" type="button">Reset</button>
+        </div>
+      </div>
+      <p id="filterSummary" style="font-size:0.85rem; color:#777; margin:14px 0 0;"></p>
+    </div>
+
+    <div class="stat-row stat-row-3">
+      <div class="stat">
+        <div class="num" id="statTotal">—</div>
+        <div class="label">Total records</div>
+      </div>
+      <div class="stat">
+        <div class="num" id="statYear">—</div>
+        <div class="label" id="statYearLabel">2026 records</div>
+      </div>
+      <div class="stat">
+        <div class="num" id="statAvgBloom">—</div>
+        <div class="label" id="statAvgBloomLabel">Average date (filtered)</div>
+      </div>
+    </div>
+
+    <div class="results-grid">
+
+      <div class="panel">
+        <h3>Record locations <span class="tag" id="mapTag">all records</span></h3>
+        <div style="border-radius:10px;overflow:hidden;border:1px solid rgba(47,74,60,0.1);height:420px;">
+          <iframe id="arcgisMap"
+            src="https://services1.arcgis.com/PhkL97KbkzUBf4PQ/arcgis/rest/services/survey123_f04dc9ec2ecf4883be13f840229b9ea5_results/FeatureServer/0/query?where=1%3D1&outFields=fruit&geometryType=esriGeometryPoint&returnGeometry=true&f=geojson"
+            style="display:none"></iframe>
+          <div id="leafletMap" style="height:420px;width:100%;border-radius:10px;"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3 id="breakdownTitle">Records by fruit <span class="tag">filtered</span></h3>
+        <div style="display:flex;gap:8px;margin-bottom:14px;" id="breakdownNav">
+          <button class="btn btn-ghost" id="btnBack" style="display:none;padding:6px 14px;font-size:0.82rem;">← Back</button>
+          <button class="btn btn-ghost" id="btnReset" style="display:none;padding:6px 14px;font-size:0.82rem;">↺ Reset</button>
+        </div>
+        <p id="breakdownHint" style="font-size:0.78rem;color:#888;margin:0 0 12px;font-family:var(--mono);">Click a row to filter by that fruit or variety.</p>
+        <div id="breakdownBars" style="height:360px;overflow-y:auto;padding-right:4px;"><!-- injected --></div>
+      </div>
+
+    </div>
+
+    <div class="panel">
+      <h3>Submissions <span class="tag" id="recordsCountTag">filtered</span></h3>
+      <table class="records-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Fruit</th>
+            <th>Variety</th>
+            <th>Stage</th>
+            <th>Location</th>
+          </tr>
+        </thead>
+        <tbody id="recordsBody">
+          <!-- rows injected by js/results.js -->
+        </tbody>
+      </table>
+      <p id="recordsEmpty" style="display:none; text-align:center; color:#888; padding:20px 0 4px;">No records match these filters.</p>
+    </div>
+
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <h4>FruitWatch</h4>
+      <p style="max-width:32ch; font-size:0.88rem;">A citizen science project recording UK fruit tree flowering, run from the University of Reading.</p>
+    </div>
+    <div class="foot-links">
+      <ul>
+        <li><strong style="color:var(--cream)">Project</strong></li>
+        <li><a href="index.html">About</a></li>
+        <li><a href="results.html">Results</a></li>
+        <li><a href="submit.html">Submit a record</a></li>
+      </ul>
+      <ul>
+        <li><strong style="color:var(--cream)">Contact</strong></li>
+        <li><a href="mailto:fruitwatch@reading.ac.uk">fruitwatch@reading.ac.uk</a></li>
+        <li><a href="#">University of Reading</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot-bottom">© 2026 FruitWatch, University of Reading.</div>
+</footer>
+
+<script src="js/results.js"></script>
+</body>
+</html>
