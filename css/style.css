@@ -611,15 +611,42 @@ footer .foot-links ul { list-style: none; margin: 0; padding: 0; display: flex; 
 }
 
 @media (max-width: 880px) {
+  /* Hide all images on mobile */
   .hero-img-wrap { display: none; }
+  .hero .wrap { grid-template-columns: 1fr; }
+
+  /* Hide bee image — it's inline in the alt-bg grid */
+  .alt-bg .wrap > div[style*="grid"] {
+    display: block;
+  }
+  .alt-bg .wrap > div[style*="grid"] > img {
+    display: none;
+  }
+
+  /* Full width text */
+  .hero h1 { font-size: clamp(1.8rem, 6vw, 2.4rem); }
+  .hero .lede { max-width: 100%; }
+  .wrap { padding: 0 16px; }
+
+  /* Cards stack */
   .cards { grid-template-columns: 1fr; }
+
+  /* Steps stack */
   .steps { grid-template-columns: 1fr; gap: 28px; }
   .step:not(:first-child)::before { display: none; }
+
+  /* Results */
   .results-grid { grid-template-columns: 1fr; }
   .stat-row { grid-template-columns: 1fr 1fr; }
-  nav.primary-nav { display: none; }
-  .site-header .wrap { justify-content: space-between; }
-  .bee-img-col { display: none; }
+  .filter-row { grid-template-columns: 1fr 1fr; }
+
+  /* Keep nav visible but smaller */
+  nav.primary-nav { display: flex; gap: 2px; }
+  nav.primary-nav a { font-size: 0.78rem; padding: 7px 10px; }
+  nav.primary-nav a.cta { margin-left: 2px; }
+  .site-header .wrap { justify-content: space-between; height: 60px; }
+  .brand { font-size: 1.1rem; }
+  .brand-mark { width: 24px; height: 24px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
