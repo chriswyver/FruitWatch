@@ -56,15 +56,19 @@ async function fetchRecords() {
     const g = f.geometry || {};
     const speciesCfg = SPECIES_CONFIG.find(s => s.name === a.fruit);
     let variety = "";
-    if (speciesCfg) variety = a[speciesCfg.field] || a[speciesCfg.otherField] || "";
-    if (variety === "other") variety = "";
+    let rawVariety = "";
+    if (speciesCfg) {
+      rawVariety = a[speciesCfg.field] || "";
+      variety = rawVariety === "other" ? (a[speciesCfg.otherField] || "") : rawVariety;
+    }
     if (!variety || variety === "Unknown") variety = "Unknown variety";
     return {
-      species:  a.fruit || "Unknown",
+      species:     a.fruit || "Unknown",
       variety,
-      date:     a.date_time ? new Date(a.date_time) : null,
-      stage:    normaliseStage(a.flowering_stage),
-      postcode: a.postcode || "",
+      _rawVariety: rawVariety,
+      date:        a.date_time ? new Date(a.date_time) : null,
+      stage:       normaliseStage(a.flowering_stage),
+      postcode:    a.postcode || "",
       x: g.x, y: g.y
     };
   }).filter(r => r.date !== null);
@@ -168,10 +172,18 @@ function markerSvg(color, stage) {
 function updateMap(filtered) {
   markerLayer.clearLayers();
   const tag = document.getElementById("mapTag");
-  tag.textContent = `${filtered.length} record${filtered.length === 1 ? "" : "s"}`;
 
-  filtered.forEach(r => {
-    if (!r.x || !r.y) return;
+  // Only plot records where variety came from the main list (not free-text other)
+  const mappable = filtered.filter(r => {
+    const speciesCfg = SPECIES_CONFIG.find(s => s.name === r.species);
+    if (!speciesCfg) return r.x && r.y;
+    // If the raw coded value was "other", it's a free-text entry — exclude until reviewed
+    return r._rawVariety !== "other" && r.x && r.y;
+  });
+
+  tag.textContent = `${mappable.length} record${mappable.length === 1 ? "" : "s"}`;
+
+  mappable.forEach(r => {
     const color = colorFor(r.species);
     const svg   = markerSvg(color, r.stage);
 
@@ -184,7 +196,7 @@ function updateMap(filtered) {
 
     const marker = L.marker([r.y, r.x], { icon });
     marker.bindTooltip(
-      `<strong>${r.species}</strong>${r.variety !== "Unknown variety" ? "<br>" + r.variety : ""}
+      `<strong>${r.species}</strong><br>${r.variety}
        <br>${r.stage}<br>${formatDate(r.date)}${r.postcode ? "<br>" + r.postcode : ""}`,
       { direction: "top", offset: [0, -4] }
     );
