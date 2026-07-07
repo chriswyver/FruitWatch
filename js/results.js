@@ -143,6 +143,28 @@ function initMap() {
   markerLayer = L.layerGroup().addTo(leafletMap);
 }
 
+function markerSvg(color, stage) {
+  const size = 14;
+  const half = size / 2;
+
+  let shape;
+  if (stage === "Start of Flowering") {
+    // Circle — bud opening
+    shape = `<circle cx="${half}" cy="${half}" r="${half - 1.5}" fill="${color}" stroke="#FBF7F0" stroke-width="1.5"/>`;
+  } else if (stage === "Peak Flowering") {
+    // Diamond — full open
+    shape = `<polygon points="${half},1.5 ${size - 1.5},${half} ${half},${size - 1.5} 1.5,${half}" fill="${color}" stroke="#FBF7F0" stroke-width="1.5"/>`;
+  } else if (stage === "End of Flowering") {
+    // Triangle — closing
+    shape = `<polygon points="${half},1.5 ${size - 1.5},${size - 1.5} 1.5,${size - 1.5}" fill="${color}" stroke="#FBF7F0" stroke-width="1.5"/>`;
+  } else {
+    // Square — unknown
+    shape = `<rect x="1.5" y="1.5" width="${size - 3}" height="${size - 3}" rx="2" fill="${color}" stroke="#FBF7F0" stroke-width="1.5"/>`;
+  }
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${shape}</svg>`;
+}
+
 function updateMap(filtered) {
   markerLayer.clearLayers();
   const tag = document.getElementById("mapTag");
@@ -151,16 +173,19 @@ function updateMap(filtered) {
   filtered.forEach(r => {
     if (!r.x || !r.y) return;
     const color = colorFor(r.species);
-    const marker = L.circleMarker([r.y, r.x], {
-      radius: 6,
-      fillColor: color,
-      color: "#FBF7F0",
-      weight: 1.5,
-      opacity: 1,
-      fillOpacity: 0.85
+    const svg   = markerSvg(color, r.stage);
+
+    const icon = L.divIcon({
+      html: svg,
+      className: "",
+      iconSize: [14, 14],
+      iconAnchor: [7, 7]
     });
+
+    const marker = L.marker([r.y, r.x], { icon });
     marker.bindTooltip(
-      `<strong>${r.species}</strong>${r.variety !== "Unknown variety" ? "<br>" + r.variety : ""}<br>${formatShortDate(r.date)}${r.postcode ? "<br>" + r.postcode : ""}`,
+      `<strong>${r.species}</strong>${r.variety !== "Unknown variety" ? "<br>" + r.variety : ""}
+       <br>${r.stage}<br>${formatDate(r.date)}${r.postcode ? "<br>" + r.postcode : ""}`,
       { direction: "top", offset: [0, -4] }
     );
     markerLayer.addLayer(marker);
@@ -289,6 +314,19 @@ function renderFilterSummary(filters, count) {
     : `Showing all ${count} records — no filters applied`;
 }
 
+function updateTlNote() {
+  const filters = getFilters();
+  const parts = [];
+  if (filters.fruit)   parts.push(filters.fruit);
+  if (filters.variety) parts.push(`'${filters.variety}'`);
+  if (filters.year)    parts.push(filters.year);
+  if (filters.stage)   parts.push(filters.stage);
+  const note = document.getElementById("tlFilterNote");
+  if (note) note.textContent = parts.length
+    ? `Timelapse will use current filters: ${parts.join(", ")}`
+    : "Timelapse will use all records — set filters above to narrow down.";
+}
+
 function renderAll(records) {
   const filters  = getFilters();
   const filtered = applyFilters(records, filters);
@@ -297,6 +335,102 @@ function renderAll(records) {
   renderTable(filtered);
   updateMap(filtered);
   renderFilterSummary(filters, filtered.length);
+  updateTlNote();
+}
+
+// ---------- Timelapse ----------
+
+let tlInterval = null;
+
+function populateTlYearSelect(records) {
+  const sel = document.getElementById("tlYear");
+  const years = [...new Set(records.map(r => r.date.getFullYear()))].sort((a, b) => b - a);
+  years.forEach(y => {
+    const o = document.createElement("option");
+    o.value = y; o.textContent = y;
+    sel.appendChild(o);
+  });
+}
+
+function stopTimelapse() {
+  if (tlInterval) { clearInterval(tlInterval); tlInterval = null; }
+  document.getElementById("tlPlay").style.display = "inline-flex";
+  document.getElementById("tlStop").style.display = "none";
+  document.getElementById("tlDateLabel").textContent = "";
+  document.getElementById("tlSlider").style.display = "none";
+}
+
+function startTimelapse(records) {
+  const year = parseInt(document.getElementById("tlYear").value);
+  if (!year) return;
+
+  stopTimelapse();
+
+  // Use main page filters
+  const { fruit, variety, stage } = getFilters();
+
+  let yearRecords = records.filter(r => r.date.getFullYear() === year && r.x && r.y);
+  if (fruit)   yearRecords = yearRecords.filter(r => r.species === fruit);
+  if (variety) yearRecords = yearRecords.filter(r => r.variety === variety);
+  if (stage)   yearRecords = yearRecords.filter(r => r.stage === stage);
+
+  if (!yearRecords.length) {
+    document.getElementById("tlDateLabel").textContent = "No records match current filters.";
+    return;
+  }
+
+  const sorted = [...yearRecords].sort((a, b) => a.date - b.date);
+  const minDay = sorted[0].date;
+  const maxDay = sorted[sorted.length - 1].date;
+  const totalDays = Math.ceil((maxDay - minDay) / 86400000) + 1;
+
+  const slider = document.getElementById("tlSlider");
+  slider.min = 0;
+  slider.max = totalDays;
+  slider.value = 0;
+  slider.style.display = "block";
+
+  document.getElementById("tlPlay").style.display = "none";
+  document.getElementById("tlStop").style.display = "inline-flex";
+
+  let day = 0;
+
+  function renderDay(d) {
+    const cutoff = new Date(minDay.getTime() + d * 86400000);
+    const visible = sorted.filter(r => r.date <= cutoff);
+    markerLayer.clearLayers();
+    visible.forEach(r => {
+      const color = colorFor(r.species);
+      const icon  = L.divIcon({
+        html: markerSvg(color, r.stage),
+        className: "", iconSize: [14, 14], iconAnchor: [7, 7]
+      });
+      const marker = L.marker([r.y, r.x], { icon });
+      marker.bindTooltip(
+        `<strong>${r.species}</strong>${r.variety !== "Unknown variety" ? "<br>" + r.variety : ""}
+         <br>${r.stage}<br>${formatDate(r.date)}${r.postcode ? "<br>" + r.postcode : ""}`,
+        { direction: "top", offset: [0, -4] }
+      );
+      markerLayer.addLayer(marker);
+    });
+    document.getElementById("tlDateLabel").textContent = formatShortDate(cutoff) + ` (${visible.length} records)`;
+    document.getElementById("mapTag").textContent = `${visible.length} record${visible.length === 1 ? "" : "s"}`;
+    slider.value = d;
+  }
+
+  renderDay(0);
+
+  tlInterval = setInterval(() => {
+    day++;
+    renderDay(day);
+    if (day >= totalDays) stopTimelapse();
+  }, 80); // 80ms per day = roughly 6 seconds for a full season
+
+  // Allow manual scrubbing
+  slider.addEventListener("input", () => {
+    if (tlInterval) { clearInterval(tlInterval); tlInterval = null; }
+    renderDay(parseInt(slider.value));
+  });
 }
 
 function showError(msg) {
@@ -328,9 +462,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     populateVarietySelect(records, e.target.value);
     renderAll(records);
   });
-  ["filterVariety","filterYear","filterStage"].forEach(id =>
+  ["filterVariety","filterStage"].forEach(id =>
     document.getElementById(id).addEventListener("change", () => renderAll(records))
   );
+  document.getElementById("filterYear").addEventListener("change", () => {
+    // Sync timelapse year to match main filter
+    const yr = document.getElementById("filterYear").value;
+    document.getElementById("tlYear").value = yr;
+    renderAll(records);
+  });
   document.getElementById("resetFilters").addEventListener("click", () => {
     ["filterFruit","filterVariety","filterYear","filterStage"].forEach(id =>
       document.getElementById(id).value = "");
@@ -349,6 +489,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("filterFruit").value   = "";
     document.getElementById("filterVariety").value = "";
     populateVarietySelect(records, "");
+    renderAll(records);
+  });
+
+  // Timelapse
+  populateTlYearSelect(records);
+  document.getElementById("tlPlay").addEventListener("click", () => startTimelapse(records));
+  document.getElementById("tlStop").addEventListener("click", () => {
+    stopTimelapse();
     renderAll(records);
   });
 

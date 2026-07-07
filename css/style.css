@@ -343,15 +343,13 @@ section { padding: 64px 0; }
 .step {
   position: relative;
   padding: 0 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
 }
 .step:not(:first-child)::before {
-  content: "";
-  position: absolute;
-  left: 0; top: 22px;
-  width: 100%;
-  height: 1.5px;
-  background: repeating-linear-gradient(to right, rgba(47,74,60,0.3) 0 6px, transparent 6px 12px);
-  transform: translateX(-50%);
+  display: none;
 }
 .step-num {
   width: 44px;
@@ -636,7 +634,6 @@ footer .foot-links ul { list-style: none; margin: 0; padding: 0; display: flex; 
 
   /* Steps stack */
   .steps { grid-template-columns: 1fr; gap: 28px; }
-  .step:not(:first-child)::before { display: none; }
 
   /* Results */
   .results-grid { grid-template-columns: 1fr; }

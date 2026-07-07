@@ -99,11 +99,34 @@
 
       <div class="panel">
         <h3>Record locations <span class="tag" id="mapTag">all records</span></h3>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
+          <button id="tlPlay" class="btn btn-ghost" style="padding:6px 14px;font-size:0.82rem;">▶ Play season</button>
+          <button id="tlStop" class="btn btn-ghost" style="padding:6px 14px;font-size:0.82rem;display:none;">■ Stop</button>
+          <select id="tlYear" style="font-size:0.82rem;padding:6px 10px;border:1px solid rgba(47,74,60,0.2);border-radius:8px;background:var(--cream);color:var(--orchard);font-family:var(--mono);">
+            <option value="">Select year for timelapse</option>
+          </select>
+          <span id="tlDateLabel" style="font-size:0.82rem;font-family:var(--mono);color:#888;"></span>
+        </div>
+        <p id="tlFilterNote" style="font-size:0.78rem;color:#888;font-family:var(--mono);margin:0 0 10px;"></p>
+        <input type="range" id="tlSlider" min="0" max="100" value="100"
+          style="width:100%;margin-bottom:10px;accent-color:var(--blossom-deep);display:none;">
         <div style="border-radius:10px;overflow:hidden;border:1px solid rgba(47,74,60,0.1);height:420px;">
           <iframe id="arcgisMap"
             src="https://services1.arcgis.com/PhkL97KbkzUBf4PQ/arcgis/rest/services/survey123_f04dc9ec2ecf4883be13f840229b9ea5_results/FeatureServer/0/query?where=1%3D1&outFields=fruit&geometryType=esriGeometryPoint&returnGeometry=true&f=geojson"
             style="display:none"></iframe>
           <div id="leafletMap" style="height:420px;width:100%;border-radius:10px;"></div>
+        </div>
+        <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:10px;font-size:0.78rem;color:#666;font-family:var(--mono);">
+          <span style="display:flex;align-items:center;gap:6px;">
+            <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.5" fill="#888" stroke="#FBF7F0" stroke-width="1.5"/></svg> Start of flowering
+          </span>
+          <span style="display:flex;align-items:center;gap:6px;">
+            <svg width="14" height="14" viewBox="0 0 14 14"><polygon points="7,1.5 12.5,7 7,12.5 1.5,7" fill="#888" stroke="#FBF7F0" stroke-width="1.5"/></svg> Peak flowering
+          </span>
+          <span style="display:flex;align-items:center;gap:6px;">
+            <svg width="14" height="14" viewBox="0 0 14 14"><polygon points="7,1.5 12.5,12.5 1.5,12.5" fill="#888" stroke="#FBF7F0" stroke-width="1.5"/></svg> End of flowering
+          </span>
+          <span style="color:#999;">Colour = fruit type · hover for detail</span>
         </div>
       </div>
 
