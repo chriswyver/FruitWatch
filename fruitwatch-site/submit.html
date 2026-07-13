@@ -25,9 +25,7 @@
     <nav class="primary-nav">
       <a href="index.html">About</a>
       <a href="results.html">Results</a>
-      <a href="faq.html">FAQ</a>
-      <a href="news.html">Publications</a>
-      <a href="submit.html" class="cta">Submit a record</a>
+      <a href="submit.html" class="cta active">Submit a record</a>
     </nav>
   </div>
 </header>
@@ -37,7 +35,6 @@
     <span class="eyebrow">Takes about two minutes</span>
     <h1 style="font-size:clamp(2rem,3.4vw,2.8rem); max-width:24ch;">Tell us what's blooming near you</h1>
     <p class="lede" style="max-width:60ch;">Fill in the form below — species, location, and what stage the blossom is at. You don't need an account, and you can submit as many trees as you like.</p>
-    <p style="font-size:0.88rem;color:#777;margin-top:-8px;">New to FruitWatch? <a href="faq.html" style="color:var(--blossom-deep);font-weight:600;">Read our FAQ →</a></p>
   </div>
 </section>
 
@@ -88,15 +85,13 @@
     <div class="foot-links">
       <ul>
         <li><strong style="color:var(--cream)">Project</strong></li>
-        <li><a href="index.html">About</a>
-      <a href="faq.html">FAQ</a>
-      <a href="news.html">Publications</a></li>
+        <li><a href="index.html">About</a></li>
         <li><a href="results.html">Results</a></li>
         <li><a href="submit.html">Submit a record</a></li>
       </ul>
       <ul>
         <li><strong style="color:var(--cream)">Contact</strong></li>
-        <li><span style="color:var(--blossom);font-size:0.88rem;">fruitwatch@reading.ac.uk</span> <button onclick="navigator.clipboard.writeText('fruitwatch@reading.ac.uk').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})" style="font-size:0.72rem;font-family:var(--mono);background:rgba(255,255,255,0.15);color:var(--cream);border:none;padding:2px 8px;border-radius:4px;cursor:pointer;margin-left:4px;">Copy</button></li>
+        <li><span class="email-copy" onclick="navigator.clipboard.writeText('fruitwatch@reading.ac.uk').then(()=>{const t=this.querySelector('.copy-tip');t.textContent='Copied!';setTimeout(()=>t.textContent='Copy',1500)})" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;color:var(--blossom);font-size:0.88rem;">fruitwatch@reading.ac.uk <span class="copy-tip" style="font-size:0.72rem;font-family:var(--mono);background:rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px;">Copy</span></span></li>
         <li><a href="#">University of Reading</a></li>
       </ul>
     </div>
@@ -104,14 +99,5 @@
   <div class="foot-bottom">© 2026 FruitWatch, University of Reading.</div>
 </footer>
 
-<script>
-// Hide the nav link for the current page
-(function() {
-  const current = window.location.pathname.split('/').pop() || 'index.html';
-  document.querySelectorAll('.primary-nav a').forEach(a => {
-    if (a.getAttribute('href') === current) a.style.display = 'none';
-  });
-})();
-</script>
 </body>
 </html>

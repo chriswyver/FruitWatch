@@ -23,10 +23,8 @@
       FruitWatch
     </a>
     <nav class="primary-nav">
-      <a href="index.html">About</a>
+      <a href="index.html" class="active">About</a>
       <a href="results.html">Results</a>
-      <a href="faq.html">FAQ</a>
-      <a href="news.html">Publications</a>
       <a href="submit.html" class="cta">Submit a record</a>
     </nav>
   </div>
@@ -41,7 +39,6 @@
       <div class="hero-actions">
         <a href="submit.html" class="btn btn-primary">Submit a sighting →</a>
         <a href="results.html" class="btn btn-ghost">See the data</a>
-        <a href="faq.html" class="btn btn-ghost">Got a question?</a>
       </div>
     </div>
     <div class="hero-img-wrap">
@@ -83,7 +80,6 @@
         </svg>
         <h3>Feeds real research</h3>
         <p>Data underpins peer-reviewed work on phenology and pollination, and is shared openly with the research community.</p>
-        <a href="news.html" style="display:inline-block;margin-top:12px;font-size:0.82rem;font-family:var(--mono);color:var(--orchard);font-weight:600;text-decoration:none;border-bottom:1.5px solid var(--blossom);">See publications →</a>
       </div>
     </div>
   </div>
@@ -106,15 +102,13 @@
     <div class="foot-links">
       <ul>
         <li><strong style="color:var(--cream)">Project</strong></li>
-        <li><a href="index.html">About</a>
-      <a href="faq.html">FAQ</a>
-      <a href="news.html">Publications</a></li>
+        <li><a href="index.html">About</a></li>
         <li><a href="results.html">Results</a></li>
         <li><a href="submit.html">Submit a record</a></li>
       </ul>
       <ul>
         <li><strong style="color:var(--cream)">Contact</strong></li>
-        <li><span style="color:var(--blossom);font-size:0.88rem;">fruitwatch@reading.ac.uk</span> <button onclick="navigator.clipboard.writeText('fruitwatch@reading.ac.uk').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})" style="font-size:0.72rem;font-family:var(--mono);background:rgba(255,255,255,0.15);color:var(--cream);border:none;padding:2px 8px;border-radius:4px;cursor:pointer;margin-left:4px;">Copy</button></li>
+        <li><span class="email-copy" onclick="navigator.clipboard.writeText('fruitwatch@reading.ac.uk').then(()=>{const t=this.querySelector('.copy-tip');t.textContent='Copied!';setTimeout(()=>t.textContent='Copy',1500)})" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;color:var(--blossom);font-size:0.88rem;">fruitwatch@reading.ac.uk <span class="copy-tip" style="font-size:0.72rem;font-family:var(--mono);background:rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px;">Copy</span></span></li>
         <li><a href="#">University of Reading</a></li>
       </ul>
     </div>
@@ -191,15 +185,6 @@ async function updateTimeline() {
 }
 
 document.addEventListener("DOMContentLoaded", updateTimeline);
-</script>
-<script>
-// Hide the nav link for the current page
-(function() {
-  const current = window.location.pathname.split('/').pop() || 'index.html';
-  document.querySelectorAll('.primary-nav a').forEach(a => {
-    if (a.getAttribute('href') === current) a.style.display = 'none';
-  });
-})();
 </script>
 </body>
 </html>

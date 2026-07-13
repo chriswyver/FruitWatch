@@ -19,12 +19,10 @@
         FruitWatch
       </a>
       <nav class="primary-nav">
-      <a href="index.html">About</a>
-      <a href="results.html">Results</a>
-      <a href="faq.html">FAQ</a>
-      <a href="news.html">Publications</a>
-      <a href="submit.html" class="cta">Submit a record</a>
-    </nav>
+        <a href="index.html">About</a>
+        <a href="results.html">Results</a>
+        <a href="submit.html" class="cta">Submit a record</a>
+      </nav>
     </div>
   </header>
 
@@ -57,21 +55,10 @@
       <p>© 2026 FruitWatch, University of Reading.</p>
       <nav>
         <a href="index.html">About</a>
-      <a href="faq.html">FAQ</a>
-      <a href="news.html">Publications</a>
         <a href="results.html">Results</a>
         <a href="submit.html">Submit</a>
       </nav>
     </div>
   </footer>
-<script>
-// Hide the nav link for the current page
-(function() {
-  const current = window.location.pathname.split('/').pop() || 'index.html';
-  document.querySelectorAll('.primary-nav a').forEach(a => {
-    if (a.getAttribute('href') === current) a.style.display = 'none';
-  });
-})();
-</script>
 </body>
 </html>

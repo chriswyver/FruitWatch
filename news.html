@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Publications & News — FruitWatch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .news-hero {
+    background: var(--orchard);
+    padding: 64px 0 48px;
+  }
+  .news-hero .eyebrow { color: var(--blossom); }
+  .news-hero h1 { color: var(--cream); font-size: clamp(2rem, 5vw, 3rem); margin-bottom: 8px; }
+  .news-hero p { color: rgba(251,247,240,0.75); max-width: 52ch; }
+
+  .news-section { padding: 48px 0 0; }
+  .news-section h2 {
+    font-size: 1.3rem;
+    color: var(--orchard);
+    margin-bottom: 24px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid rgba(47,74,60,0.1);
+  }
+
+  .pub-card {
+    background: #fff;
+    border: 1px solid rgba(47,74,60,0.1);
+    border-radius: 16px;
+    padding: 28px 32px;
+    margin-bottom: 20px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+  .pub-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: var(--blossom);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .pub-icon svg { width: 24px; height: 24px; color: var(--orchard); }
+  .pub-type {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #888;
+    margin-bottom: 6px;
+  }
+  .pub-title {
+    font-family: var(--serif);
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--orchard);
+    margin-bottom: 8px;
+    line-height: 1.4;
+  }
+  .pub-authors {
+    font-size: 0.88rem;
+    color: #555;
+    margin-bottom: 6px;
+  }
+  .pub-journal {
+    font-size: 0.85rem;
+    color: #777;
+    margin-bottom: 12px;
+    font-style: italic;
+  }
+  .pub-abstract {
+    font-size: 0.88rem;
+    color: #555;
+    line-height: 1.65;
+    margin-bottom: 16px;
+  }
+  .pub-links {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .pub-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    font-family: var(--mono);
+    text-decoration: none;
+    transition: all 0.15s;
+  }
+  .pub-link-primary {
+    background: var(--orchard);
+    color: var(--cream);
+  }
+  .pub-link-primary:hover { background: #1a3d28; }
+  .pub-link-ghost {
+    border: 1.5px solid rgba(47,74,60,0.2);
+    color: var(--orchard);
+  }
+  .pub-link-ghost:hover { background: rgba(47,74,60,0.06); }
+
+  .news-card {
+    background: #fff;
+    border: 1px solid rgba(47,74,60,0.1);
+    border-radius: 16px;
+    padding: 24px 28px;
+    margin-bottom: 16px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+  .news-outlet {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-align: center;
+    line-height: 1.2;
+  }
+  .news-date {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 4px;
+  }
+  .news-title {
+    font-family: var(--serif);
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--orchard);
+    margin-bottom: 6px;
+    line-height: 1.4;
+  }
+  .news-desc {
+    font-size: 0.88rem;
+    color: #666;
+    line-height: 1.6;
+    margin-bottom: 12px;
+  }
+
+  .data-card {
+    background: var(--sage-light, #EEF4EC);
+    border: 1px solid rgba(47,74,60,0.12);
+    border-radius: 16px;
+    padding: 24px 28px;
+    margin-bottom: 48px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  .data-card p { margin: 0; color: #555; font-size: 0.92rem; flex: 1; }
+  .data-card strong { color: var(--orchard); }
+
+  @media (max-width: 640px) {
+    .pub-card, .news-card { grid-template-columns: 1fr; }
+    .pub-icon, .news-outlet { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html">
+      <svg class="brand-mark" viewBox="0 0 32 32" fill="none">
+        <circle cx="16" cy="16" r="4.2" fill="#D4A24C"/>
+        <ellipse cx="16" cy="7" rx="5" ry="6.4" fill="#E8B4C8"/>
+        <ellipse cx="25" cy="16" rx="6.4" ry="5" fill="#E8B4C8"/>
+        <ellipse cx="16" cy="25" rx="5" ry="6.4" fill="#E8B4C8"/>
+        <ellipse cx="7" cy="16" rx="6.4" ry="5" fill="#E8B4C8"/>
+      </svg>
+      FruitWatch
+    </a>
+    <nav class="primary-nav">
+      <a href="index.html">About</a>
+      <a href="results.html">Results</a>
+      <a href="faq.html">FAQ</a>
+      <a href="news.html">Publications</a>
+      <a href="submit.html" class="cta">Submit a record</a>
+    </nav>
+  </div>
+</header>
+
+<div class="news-hero">
+  <div class="wrap">
+    <span class="eyebrow">Impact & outputs</span>
+    <h1>Publications & news</h1>
+    <p>FruitWatch data has contributed to peer-reviewed research and attracted national media coverage since the project launched in 2022.</p>
+  </div>
+</div>
+
+<section>
+  <div class="wrap" style="max-width:860px; padding-bottom:64px;">
+
+    <!-- Publications -->
+    <div class="news-section" id="publications">
+      <h2>Publications</h2>
+
+      <div class="pub-card">
+        <div class="pub-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M4 19V5a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v13"/>
+            <path d="M4 19a2 2 0 0 0 2 2h13a1 1 0 0 0 1-1v-1"/>
+            <path d="M8 7h8M8 11h5"/>
+          </svg>
+        </div>
+        <div>
+          <div class="pub-type">Journal article · Open access</div>
+          <div class="pub-title">New citizen science initiative enhances flowering onset predictions for fruit trees in Great Britain</div>
+          <div class="pub-authors">Wyver, C., Potts, S.G., Pitts, R., Riley, M., Janetzko, G. &amp; Senapathi, D.</div>
+          <div class="pub-journal">Horticulture Research, Volume 11, Issue 6, June 2024. DOI: 10.1093/hr/uhae122</div>
+          <div class="pub-abstract">
+            Predicting when fruit trees will flower is essential for managing pollinators, pests and disease — but existing datasets rarely cover more than a handful of locations. This study introduces FruitWatch as a solution, using citizen science records to fill that gap at national scale. Using 2022 data for four cultivars, the research demonstrates that flowering dates shift significantly with latitude, that citizen-submitted records can successfully parameterise established phenology models, and that those models can generate realistic predictions of flowering onset across Great Britain. The findings show that volunteer observations can deliver the cultivar- and location-specific predictions growers need to manage their orchards effectively.
+          </div>
+          <div class="pub-links">
+            <a class="pub-link pub-link-primary" href="papers/uhae122.pdf" target="_blank" rel="noopener">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              Read paper (PDF)
+            </a>
+            <a class="pub-link pub-link-ghost" href="https://doi.org/10.1093/hr/uhae122" target="_blank" rel="noopener">
+              DOI
+            </a>
+            <a class="pub-link pub-link-ghost" href="https://doi.org/10.17864/1947.000524" target="_blank" rel="noopener">
+              Data archive
+            </a>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Media coverage -->
+    <div class="news-section" id="media">
+      <h2>Media coverage</h2>
+
+      <div class="news-card">
+        <div class="news-outlet" style="background:#EF0000;color:#fff;">BBC<br>R4</div>
+        <div>
+          <div class="news-date">5 March 2025</div>
+          <div class="news-title">BBC Radio 4 Farming Today — Pig supply chain, blossom watch and a charity farm for women</div>
+          <div class="news-desc">FruitWatch featured in BBC Radio 4's Farming Today programme, with coverage of the project's blossom watch initiative and how citizen scientists across the UK are helping researchers track the impact of climate change on fruit tree flowering dates.</div>
+          <div class="pub-links">
+            <a class="pub-link pub-link-ghost" href="https://www.bbc.co.uk/programmes/m0028jnz" target="_blank" rel="noopener">Listen on BBC Sounds →</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="news-card">
+        <div class="news-outlet" style="background:#EF0000;color:#fff;">BBC<br>Kent</div>
+        <div>
+          <div class="news-date">28 March 2022</div>
+          <div class="news-title">BBC Kent — Sunday Gardening</div>
+          <div class="news-desc">FruitWatch was featured on BBC Kent's Sunday Gardening programme following the launch of the project in spring 2022, with researchers discussing the aims of the citizen science initiative and how members of the public could get involved in tracking fruit tree flowering across the UK.</div>
+          <div class="pub-links">
+            <a class="pub-link pub-link-ghost" href="https://www.bbc.co.uk/sounds/play/p0bxzmz1" target="_blank" rel="noopener">Listen on BBC Sounds →</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="news-card">
+        <div class="news-outlet" style="background:#111;color:#fff;">The<br>Times</div>
+        <div>
+          <div class="news-date">11 March 2025</div>
+          <div class="news-title">Help to record the dates when fruit tree blossoms first appear</div>
+          <div class="news-desc">The Times covered the FruitWatch project, encouraging readers to take part in recording when fruit trees come into blossom and explaining the scientific significance of building a national dataset of flowering dates. Subscription required to read the full article.</div>
+          <div class="pub-links">
+            <a class="pub-link pub-link-ghost" href="https://www.thetimes.com/comment/register/article/help-to-record-the-dates-when-fruit-tree-blossoms-first-appear-blkhqxm0v" target="_blank" rel="noopener">Read article (subscription) →</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="news-card">
+        <div class="news-outlet" style="background:#052962;color:#fff;">The Guardian</div>
+        <div>
+          <div class="news-date">19 March 2022</div>
+          <div class="news-title">Plum job: UK public to track fruit trees in climate study</div>
+          <div class="news-desc">The Guardian covered the launch of FruitWatch, highlighting how the project invites members of the public to record when their fruit trees come into flower — and why this data matters for understanding how climate change is affecting the timing of blossom across Britain.</div>
+          <div class="pub-links">
+            <a class="pub-link pub-link-ghost" href="https://www.theguardian.com/environment/2022/mar/19/plum-job-uk-public-track-fruit-trees-climate-study-fruitwatch" target="_blank" rel="noopener">Read article →</a>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <h4>FruitWatch</h4>
+      <p style="max-width:32ch; font-size:0.88rem;">A citizen science project recording UK fruit tree flowering, run from the University of Reading.</p>
+    </div>
+    <div class="foot-links">
+      <ul>
+        <li><strong style="color:var(--cream)">Project</strong></li>
+        <li><a href="index.html">About</a></li>
+        <li><a href="results.html">Results</a></li>
+        <li><a href="submit.html">Submit a record</a></li>
+        <li><a href="faq.html">FAQ</a></li>
+        <li><a href="news.html">Publications & news</a></li>
+      </ul>
+      <ul>
+        <li><strong style="color:var(--cream)">Contact</strong></li>
+        <li><span style="color:var(--blossom);font-size:0.88rem;">fruitwatch@reading.ac.uk</span> <button onclick="navigator.clipboard.writeText('fruitwatch@reading.ac.uk').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})" style="font-size:0.72rem;font-family:var(--mono);background:rgba(255,255,255,0.15);color:var(--cream);border:none;padding:2px 8px;border-radius:4px;cursor:pointer;margin-left:4px;">Copy</button></li>
+        <li><a href="#">University of Reading</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot-bottom">© 2026 FruitWatch, University of Reading.</div>
+</footer>
+
+<script>
+// Hide the nav link for the current page
+(function() {
+  const current = window.location.pathname.split('/').pop() || 'index.html';
+  document.querySelectorAll('.primary-nav a').forEach(a => {
+    if (a.getAttribute('href') === current) a.style.display = 'none';
+  });
+})();
+</script>
+</body>
+</html>
