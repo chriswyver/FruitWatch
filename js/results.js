@@ -1,15 +1,14 @@
 // FruitWatch — results.js
 
-const FEATURE_LAYER_URL = "https://services1.arcgis.com/PhkL97KbkzUBf4PQ/arcgis/rest/services/survey123_f04dc9ec2ecf4883be13f840229b9ea5_results/FeatureServer/0";
+const FEATURE_LAYER_URL = "https://services1.arcgis.com/PhkL97KbkzUBf4PQ/arcgis/rest/services/survey123_5e1ad6c87dc44ad991c9e2e0aadbdf7f_results/FeatureServer/0";
 
 const SPECIES_CONFIG = [
-  { name: "Apple",      field: "variety_apple",     otherField: "variety_apple_other",     color: "#E8B4C8" },
-  { name: "Crab-apple", field: "variety_crab_apple", otherField: "variety_crab_apple_other", color: "#9FBFA8" },
-  { name: "Apricot",    field: "field_31",           otherField: "field_31_other",           color: "#F0B27A" },
-  { name: "Cherry",     field: "field_32",           otherField: "field_32_other",           color: "#C97D9A" },
-  { name: "Peach",      field: "field_34",           otherField: "field_34_other",           color: "#F2A0A0" },
-  { name: "Pear",       field: "variety_pear",       otherField: "variety_pear_other",       color: "#D8E0A0" },
-  { name: "Plum",       field: "field_36",           otherField: "field_36_other",           color: "#8C6BA8" },
+  { name: "Apple",   field: "variety_apple",   otherField: "variety_apple_other",   color: "#E8B4C8" },
+  { name: "Apricot", field: "variety_apricot", otherField: "variety_apricot_other", color: "#F0B27A" },
+  { name: "Cherry",  field: "variety_cherry",  otherField: "variety_cherry_other",  color: "#C97D9A" },
+  { name: "Peach",   field: "variety_peach",   otherField: "variety_peach_other",   color: "#F2A0A0" },
+  { name: "Pear",    field: "variety_pear",    otherField: "variety_pear_other",    color: "#D8E0A0" },
+  { name: "Plum",    field: "variety_plum",    otherField: "variety_plum_other",    color: "#8C6BA8" },
 ];
 
 const colorFor = name => (SPECIES_CONFIG.find(s => s.name === name) || {}).color || "#999";
@@ -21,42 +20,21 @@ function normaliseStage(raw) {
   if (raw.startsWith("C")) return "End of Flowering";
   return raw;
 }
-
 const CURRENT_YEAR = new Date().getFullYear();
 let leafletMap = null;
 let markerLayer = null;
 
 // ---------- Fetch ----------
 
-async function fetchRecords() {
-  let allFeatures = [];
-  let offset = 0;
-  let exceeded = true;
+const CACHE_KEY = "fw_records_v2";
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
-  while (exceeded) {
-    const params = new URLSearchParams({
-      where: "1=1",
-      outFields: "*",
-      orderByFields: "date_time DESC",
-      resultRecordCount: 1000,
-      resultOffset: offset,
-      f: "json"
-    });
-    const res  = await fetch(`${FEATURE_LAYER_URL}/query?${params}`);
-    const data = await res.json();
-    if (data.error) throw new Error(data.error.message || "Query failed");
-    allFeatures = allFeatures.concat(data.features || []);
-    exceeded = data.exceededTransferLimit === true;
-    offset += 1000;
-    if (offset > 10000) break;
-  }
-
-  return allFeatures.map(f => {
+function parseFeatures(features) {
+  return features.map(f => {
     const a = f.attributes;
     const g = f.geometry || {};
     const speciesCfg = SPECIES_CONFIG.find(s => s.name === a.fruit);
-    let variety = "";
-    let rawVariety = "";
+    let variety = "", rawVariety = "";
     if (speciesCfg) {
       rawVariety = a[speciesCfg.field] || "";
       variety = rawVariety === "other" ? (a[speciesCfg.otherField] || "") : rawVariety;
@@ -66,21 +44,93 @@ async function fetchRecords() {
       species:     a.fruit || "Unknown",
       variety,
       _rawVariety: rawVariety,
-      date:        a.date_time ? new Date(a.date_time) : null,
-      stage:       normaliseStage(a.flowering_stage),
+      date:        a._date ? new Date(a._date) : null,
+      stage:       normaliseStage(a.select_flowering_stage),
       postcode:    a.postcode || "",
       x: g.x, y: g.y
     };
   }).filter(r => r.date !== null);
 }
 
+const OUT_FIELDS = [
+  "_date", "fruit", "select_flowering_stage", "postcode",
+  "variety_apple", "variety_apple_other",
+  "variety_apricot", "variety_apricot_other",
+  "variety_cherry", "variety_cherry_other",
+  "variety_peach", "variety_peach_other",
+  "variety_pear", "variety_pear_other",
+  "variety_plum", "variety_plum_other"
+].join(",");
+
+async function fetchPage(offset, count) {
+  const params = new URLSearchParams({
+    where: "1=1", outFields: OUT_FIELDS,
+    orderByFields: "_date DESC",
+    resultRecordCount: count, resultOffset: offset, f: "json"
+  });
+  const res = await fetch(`${FEATURE_LAYER_URL}/query?${params}`);
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message || "Query failed");
+  return data;
+}
+
+async function fetchRecords() {
+  // Check session cache first
+  try {
+    const cached = sessionStorage.getItem(CACHE_KEY);
+    if (cached) {
+      const { ts, data } = JSON.parse(cached);
+      if (Date.now() - ts < CACHE_TTL) {
+        // Rehydrate dates
+        data.forEach(r => { if (r.date) r.date = new Date(r.date); });
+        return { records: data, complete: true };
+      }
+    }
+  } catch(e) {}
+
+  // Fast first load — get 500 records immediately
+  const firstPage = await fetchPage(0, 500);
+  const initial = parseFeatures(firstPage.features || []);
+  const exceeded = firstPage.exceededTransferLimit === true;
+
+  return { records: initial, complete: !exceeded, offset: 500 };
+}
+
+async function fetchRemaining(records, offset, onUpdate) {
+  let currentOffset = offset;
+  let exceeded = true;
+  while (exceeded && currentOffset <= 10000) {
+    const data = await fetchPage(currentOffset, 1000);
+    const newRecords = parseFeatures(data.features || []);
+    records = records.concat(newRecords);
+    exceeded = data.exceededTransferLimit === true;
+    currentOffset += 1000;
+    const loadingText = document.getElementById("loadingText");
+    if (loadingText) loadingText.textContent = `Loading… ${records.length.toLocaleString()} records`;
+    onUpdate(records);
+  }
+
+  // Save to session cache
+  try {
+    sessionStorage.setItem(CACHE_KEY, JSON.stringify({
+      ts: Date.now(),
+      data: records.map(r => ({ ...r, date: r.date?.toISOString() }))
+    }));
+  } catch(e) {}
+
+  return records;
+}
+
 // ---------- Utilities ----------
 
 function formatDate(d) {
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  // Adjust for timezone offset to avoid midnight UTC dates shifting a day
+  const adj = new Date(d.getTime() + d.getTimezoneOffset() * 60000);
+  return adj.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 function formatShortDate(d) {
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  const adj = new Date(d.getTime() + d.getTimezoneOffset() * 60000);
+  return adj.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
 // ---------- Filter UI ----------
@@ -135,16 +185,80 @@ function applyFilters(records, filters) {
   });
 }
 
+// ---------- Map expand/collapse ----------
+
+let expandedMap = null;
+let expandedMarkerLayer = null;
+
+function expandMap() {
+  const modal = document.getElementById("mapModal");
+  modal.style.display = "flex";
+  document.body.style.overflow = "hidden";
+
+  if (!expandedMap) {
+    expandedMap = L.map("leafletMapExpanded", { zoomControl: true, maxZoom: 12 }).setView(
+      leafletMap.getCenter(), leafletMap.getZoom()
+    );
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+      attribution: '© <a href="https://carto.com/">CARTO</a>',
+      subdomains: "abcd", maxZoom: 12, minZoom: 4
+    }).addTo(expandedMap);
+    expandedMarkerLayer = L.markerClusterGroup({
+      maxClusterRadius: 50,
+      showCoverageOnHover: false,
+      iconCreateFunction: cluster => {
+        const count = cluster.getChildCount();
+        const size = count < 10 ? 32 : count < 100 ? 38 : 44;
+        return L.divIcon({
+          html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:#2F4A3C;color:#FBF7F0;display:flex;align-items:center;justify-content:center;font-size:${count < 100 ? '0.78' : '0.68'}rem;font-weight:600;border:2px solid rgba(251,247,240,0.6);box-shadow:0 2px 8px rgba(47,74,60,0.35);">${count}</div>`,
+          className: "", iconSize: [size, size], iconAnchor: [size/2, size/2]
+        });
+      }
+    }).addTo(expandedMap);
+  }
+
+  // Copy markers from main map
+  expandedMarkerLayer.clearLayers();
+  markerLayer.getLayers().forEach(layer => {
+    if (layer.getLatLng) {
+      const m = L.marker(layer.getLatLng(), { icon: layer.options.icon });
+      if (layer.getTooltip()) m.bindTooltip(layer.getTooltip().getContent(), { direction: "top", offset: [0, -4] });
+      expandedMarkerLayer.addLayer(m);
+    }
+  });
+
+  setTimeout(() => expandedMap.invalidateSize(), 100);
+}
+
+function collapseMap() {
+  document.getElementById("mapModal").style.display = "none";
+  document.body.style.overflow = "";
+}
+
 // ---------- Leaflet map ----------
 
 function initMap() {
+  if (leafletMap) return;
   leafletMap = L.map("leafletMap", { zoomControl: true, maxZoom: 12 }).setView([54.5, -3], 5);
   L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
     attribution: '© <a href="https://carto.com/">CARTO</a>',
-    subdomains: "abcd",
-    maxZoom: 12
+    subdomains: "abcd", maxZoom: 12, minZoom: 4
   }).addTo(leafletMap);
-  markerLayer = L.layerGroup().addTo(leafletMap);
+
+  markerLayer = L.markerClusterGroup({
+    maxClusterRadius: 50,
+    showCoverageOnHover: false,
+    iconCreateFunction: cluster => {
+      const count = cluster.getChildCount();
+      const size = count < 10 ? 32 : count < 100 ? 38 : 44;
+      return L.divIcon({
+        html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:#2F4A3C;color:#FBF7F0;display:flex;align-items:center;justify-content:center;font-size:${count < 100 ? '0.78' : '0.68'}rem;font-weight:600;border:2px solid rgba(251,247,240,0.6);box-shadow:0 2px 8px rgba(47,74,60,0.35);">${count}</div>`,
+        className: "",
+        iconSize: [size, size],
+        iconAnchor: [size/2, size/2]
+      });
+    }
+  }).addTo(leafletMap);
 }
 
 function markerSvg(color, stage) {
@@ -173,13 +287,8 @@ function updateMap(filtered) {
   markerLayer.clearLayers();
   const tag = document.getElementById("mapTag");
 
-  // Only plot records where variety came from the main list (not free-text other)
-  const mappable = filtered.filter(r => {
-    const speciesCfg = SPECIES_CONFIG.find(s => s.name === r.species);
-    if (!speciesCfg) return r.x && r.y;
-    // If the raw coded value was "other", it's a free-text entry — exclude until reviewed
-    return r._rawVariety !== "other" && r.x && r.y;
-  });
+  // Only plot records where coordinates exist, including unknown varieties
+  const mappable = filtered.filter(r => r._rawVariety !== "other" && r.x && r.y);
 
   tag.textContent = `${mappable.length} record${mappable.length === 1 ? "" : "s"}`;
 
@@ -195,9 +304,9 @@ function updateMap(filtered) {
     });
 
     const marker = L.marker([r.y, r.x], { icon });
+    const varietyLabel = r.variety === "Unknown variety" ? "Unknown variety" : r.variety;
     marker.bindTooltip(
-      `<strong>${r.species}</strong><br>${r.variety}
-       <br>${r.stage}<br>${formatDate(r.date)}${r.postcode ? "<br>" + r.postcode : ""}`,
+      `<strong>${r.species}</strong><br>${varietyLabel}<br>${r.stage}<br>${formatDate(r.date)}${r.postcode ? "<br>" + r.postcode : ""}`,
       { direction: "top", offset: [0, -4] }
     );
     markerLayer.addLayer(marker);
@@ -548,63 +657,100 @@ document.addEventListener("DOMContentLoaded", async () => {
   initMap();
   document.getElementById("filterSummary").textContent = "Loading records…";
 
-  let records;
+  // Modal close handlers
+  document.getElementById("mapModal").addEventListener("click", e => {
+    if (e.target === document.getElementById("mapModal")) collapseMap();
+  });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") collapseMap(); });
+
+  let result;
   try {
-    records = await fetchRecords();
+    result = await fetchRecords();
   } catch (err) {
     showError(`Could not load data: ${err.message}`);
+    const li = document.getElementById("loadingIndicator");
+    if (li) li.style.display = "none";
     return;
   }
+
+  let records = result.records;
+
+  // Wire up all event listeners using a reference that gets updated
+  let recordsRef = records;
+
+  function getRecords() { return recordsRef; }
+
+  // Hide loader and render initial view immediately
+  const li = document.getElementById("loadingIndicator");
+  if (li) li.style.display = "none";
 
   populateFruitSelect(records);
   populateVarietySelect(records, "");
   populateYearSelect(records);
+  populateTlYearSelect(records);
+  renderTrendChart(records);
+  renderAll(records);
 
   document.getElementById("filterFruit").addEventListener("change", e => {
-    populateVarietySelect(records, e.target.value);
-    renderAll(records);
+    populateVarietySelect(getRecords(), e.target.value);
+    renderAll(getRecords());
   });
   ["filterVariety","filterStage"].forEach(id =>
-    document.getElementById(id).addEventListener("change", () => renderAll(records))
+    document.getElementById(id).addEventListener("change", () => renderAll(getRecords()))
   );
   document.getElementById("filterYear").addEventListener("change", () => {
-    // Sync timelapse year to match main filter
     const yr = document.getElementById("filterYear").value;
     document.getElementById("tlYear").value = yr;
-    renderAll(records);
+    renderAll(getRecords());
   });
   document.getElementById("resetFilters").addEventListener("click", () => {
     ["filterFruit","filterVariety","filterYear","filterStage"].forEach(id =>
       document.getElementById(id).value = "");
-    populateVarietySelect(records, "");
-    renderAll(records);
+    populateVarietySelect(getRecords(), "");
+    renderAll(getRecords());
   });
-
-  // Back: clear variety, keep fruit
   document.getElementById("btnBack").addEventListener("click", () => {
     document.getElementById("filterVariety").value = "";
-    renderAll(records);
+    renderAll(getRecords());
   });
-
-  // Reset: clear fruit and variety, keep year/stage
   document.getElementById("btnReset").addEventListener("click", () => {
     document.getElementById("filterFruit").value   = "";
     document.getElementById("filterVariety").value = "";
-    populateVarietySelect(records, "");
-    renderAll(records);
+    populateVarietySelect(getRecords(), "");
+    renderAll(getRecords());
   });
-
-  // Timelapse
-  populateTlYearSelect(records);
-  document.getElementById("tlPlay").addEventListener("click", () => startTimelapse(records));
+  document.getElementById("tlPlay").addEventListener("click", () => startTimelapse(getRecords()));
   document.getElementById("tlStop").addEventListener("click", () => {
     stopTimelapse();
-    renderAll(records);
+    renderAll(getRecords());
   });
+  document.getElementById("chartStage").addEventListener("change", () => renderTrendChart(getRecords()));
 
-  // Trend chart
-  renderTrendChart(records);
-  document.getElementById("chartStage").addEventListener("change", () => renderTrendChart(records));
+  // If not complete, load the rest in the background
+  if (!result.complete) {
+    const loadingText = document.getElementById("loadingText");
+    const loadingIndicator = document.getElementById("loadingIndicator");
+    if (loadingIndicator) {
+      loadingIndicator.style.display = "flex";
+      loadingText.textContent = `Loading more… ${records.length.toLocaleString()} records so far`;
+    }
 
-  renderAll(records);
+    try {
+      records = await fetchRemaining(records, result.offset, updatedRecords => {
+        recordsRef = updatedRecords;
+        // Re-populate selects and re-render quietly in background
+        populateFruitSelect(updatedRecords);
+        populateVarietySelect(updatedRecords, document.getElementById("filterFruit").value);
+        populateYearSelect(updatedRecords);
+        renderAll(updatedRecords);
+      });
+      recordsRef = records;
+      renderAll(records);
+      renderTrendChart(records);
+      populateTlYearSelect(records);
+    } catch(e) {
+      console.warn("Background load failed:", e);
+    }
+    if (loadingIndicator) loadingIndicator.style.display = "none";
+  }
 });

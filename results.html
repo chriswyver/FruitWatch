@@ -8,7 +8,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -81,6 +84,12 @@
         </div>
       </div>
       <p id="filterSummary" style="font-size:0.85rem; color:#777; margin:14px 0 0;"></p>
+      <div id="loadingIndicator" style="display:flex;align-items:center;gap:10px;margin-top:14px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--blossom-deep)" stroke-width="2.5" style="animation:spin 1s linear infinite;flex-shrink:0;">
+          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+        </svg>
+        <span id="loadingText" style="font-size:0.85rem;color:var(--blossom-deep);font-family:var(--mono);">Loading records…</span>
+      </div>
       <p style="font-size:0.82rem; color:#999; margin:10px 0 0;">
         Researcher? <a href="datarequest.html" style="color:var(--blossom-deep); font-weight:600;">Request the data →</a>
       </p>
@@ -104,7 +113,13 @@
     <div class="results-grid">
 
       <div class="panel">
-        <h3>Record locations <span class="tag" id="mapTag">all records</span></h3>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+          <h3 style="margin:0;">Record locations <span class="tag" id="mapTag">all records</span></h3>
+          <button id="mapExpandBtn" title="Expand map" onclick="expandMap()" style="background:none;border:1px solid rgba(47,74,60,0.2);border-radius:8px;padding:5px 10px;cursor:pointer;display:flex;align-items:center;gap:5px;font-size:0.78rem;font-family:var(--mono);color:var(--orchard);">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+            Expand
+          </button>
+        </div>
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
           <button id="tlPlay" class="btn btn-ghost" style="padding:6px 14px;font-size:0.82rem;">▶ Play season</button>
           <button id="tlStop" class="btn btn-ghost" style="padding:6px 14px;font-size:0.82rem;display:none;">■ Stop</button>
@@ -134,7 +149,21 @@
           </span>
           <span style="color:#999;">Colour = fruit type · hover for detail</span>
         </div>
+        <p style="font-size:0.78rem;color:#999;margin:10px 0 0;line-height:1.6;">
+          <strong style="color:#777;">Using the map:</strong> Numbered circles group nearby records — click or zoom in to expand them into individual markers. Hover a marker to see species, variety, flowering stage and date. Use the filters above to narrow down what's shown, or hit <strong style="color:#777;">▶ Play season</strong> to animate records appearing day by day. Hit <strong style="color:#777;">Expand</strong> for a full-screen view.
+        </p>
       </div>
+
+<!-- Map fullscreen modal -->
+<div id="mapModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(10,20,15,0.85);align-items:center;justify-content:center;">
+  <div style="position:relative;width:95vw;height:90vh;border-radius:16px;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,0.5);">
+    <div id="leafletMapExpanded" style="width:100%;height:100%;"></div>
+    <button onclick="collapseMap()" style="position:absolute;top:14px;right:14px;z-index:10000;background:#2F4A3C;color:#FBF7F0;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-family:var(--mono);font-size:0.82rem;display:flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(0,0,0,0.3);">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 9l-6-6M3 9V3h6M15 15l6 6M21 15v6h-6"/></svg>
+      Close
+    </button>
+  </div>
+</div>
 
       <div class="panel">
         <h3 id="breakdownTitle">Records by fruit <span class="tag">filtered</span></h3>
