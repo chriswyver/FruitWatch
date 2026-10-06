@@ -649,6 +649,8 @@ footer .foot-links ul { list-style: none; margin: 0; padding: 0; display: flex; 
   .brand-mark { width: 24px; height: 24px; }
 }
 
+@keyframes spin { to { transform: rotate(360deg); } }
+
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }

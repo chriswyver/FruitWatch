@@ -1,15 +1,14 @@
 // FruitWatch — results.js
 
-const FEATURE_LAYER_URL = "https://services1.arcgis.com/PhkL97KbkzUBf4PQ/arcgis/rest/services/survey123_f04dc9ec2ecf4883be13f840229b9ea5_results/FeatureServer/0";
+const FEATURE_LAYER_URL = "https://services1.arcgis.com/PhkL97KbkzUBf4PQ/arcgis/rest/services/survey123_5e1ad6c87dc44ad991c9e2e0aadbdf7f_results/FeatureServer/0";
 
 const SPECIES_CONFIG = [
-  { name: "Apple",      field: "variety_apple",     otherField: "variety_apple_other",     color: "#E8B4C8" },
-  { name: "Crab-apple", field: "variety_crab_apple", otherField: "variety_crab_apple_other", color: "#9FBFA8" },
-  { name: "Apricot",    field: "field_31",           otherField: "field_31_other",           color: "#F0B27A" },
-  { name: "Cherry",     field: "field_32",           otherField: "field_32_other",           color: "#C97D9A" },
-  { name: "Peach",      field: "field_34",           otherField: "field_34_other",           color: "#F2A0A0" },
-  { name: "Pear",       field: "variety_pear",       otherField: "variety_pear_other",       color: "#D8E0A0" },
-  { name: "Plum",       field: "field_36",           otherField: "field_36_other",           color: "#8C6BA8" },
+  { name: "Apple",   field: "variety_apple",   otherField: "variety_apple_other",   color: "#E8B4C8" },
+  { name: "Apricot", field: "variety_apricot", otherField: "variety_apricot_other", color: "#F0B27A" },
+  { name: "Cherry",  field: "variety_cherry",  otherField: "variety_cherry_other",  color: "#C97D9A" },
+  { name: "Peach",   field: "variety_peach",   otherField: "variety_peach_other",   color: "#F2A0A0" },
+  { name: "Pear",    field: "variety_pear",    otherField: "variety_pear_other",    color: "#D8E0A0" },
+  { name: "Plum",    field: "variety_plum",    otherField: "variety_plum_other",    color: "#8C6BA8" },
 ];
 
 const colorFor = name => (SPECIES_CONFIG.find(s => s.name === name) || {}).color || "#999";
@@ -26,76 +25,125 @@ const CURRENT_YEAR = new Date().getFullYear();
 let leafletMap = null;
 let markerLayer = null;
 
-// ---------- Fetch ----------
+// ---------- Fetch (two-phase + session cache) ----------
 
-async function fetchRecords() {
-  let allFeatures = [];
-  let offset = 0;
-  let exceeded = true;
+const CACHE_KEY = "fw_records_v3";
+const CACHE_TTL = 30 * 60 * 1000;
 
-  while (exceeded) {
-    const params = new URLSearchParams({
-      where: "1=1",
-      outFields: "*",
-      orderByFields: "date_time DESC",
-      resultRecordCount: 1000,
-      resultOffset: offset,
-      f: "json"
-    });
-    const res  = await fetch(`${FEATURE_LAYER_URL}/query?${params}`);
-    const data = await res.json();
-    if (data.error) throw new Error(data.error.message || "Query failed");
-    allFeatures = allFeatures.concat(data.features || []);
-    exceeded = data.exceededTransferLimit === true;
-    offset += 1000;
-    if (offset > 10000) break;
-  }
+const OUT_FIELDS = [
+  "_date", "fruit", "select_flowering_stage",
+  "variety_apple", "variety_apple_other",
+  "variety_apricot", "variety_apricot_other",
+  "variety_cherry", "variety_cherry_other",
+  "variety_peach", "variety_peach_other",
+  "variety_pear", "variety_pear_other",
+  "variety_plum", "variety_plum_other"
+].join(",");
 
-  return allFeatures.map(f => {
+function parseFeatures(features) {
+  return features.map(f => {
     const a = f.attributes;
     const g = f.geometry || {};
-    const speciesCfg = SPECIES_CONFIG.find(s => s.name === a.fruit);
-    let variety = "";
-    let rawVariety = "";
-    if (speciesCfg) {
-      rawVariety = a[speciesCfg.field] || "";
-      variety = rawVariety === "other" ? (a[speciesCfg.otherField] || "") : rawVariety;
+    const sc = SPECIES_CONFIG.find(s => s.name === a.fruit);
+    let variety = "", rawVariety = "";
+    if (sc) {
+      rawVariety = a[sc.field] || "";
+      variety = rawVariety === "other" ? (a[sc.otherField] || "") : rawVariety;
     }
     if (!variety || variety === "Unknown") variety = "Unknown variety";
+    const dateVal = a._date;
     return {
-      species:     a.fruit || "Unknown",
+      species: a.fruit || "Unknown",
       variety,
       _rawVariety: rawVariety,
-      date:        a.date_time ? new Date(a.date_time) : null,
-      stage:       normaliseStage(a.flowering_stage),
-      postcode:    a.postcode || "",
+      date: dateVal ? new Date(dateVal) : null,
+      stage: normaliseStage(a.select_flowering_stage),
       x: g.x, y: g.y
     };
   }).filter(r => r.date !== null);
 }
 
+async function fetchPage(offset, count) {
+  const params = new URLSearchParams({
+    where: "1=1", outFields: OUT_FIELDS,
+    orderByFields: "_date DESC",
+    resultRecordCount: count, resultOffset: offset, f: "json"
+  });
+  const res = await fetch(`${FEATURE_LAYER_URL}/query?${params}`);
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message || "Query failed");
+  return data;
+}
+
+async function fetchRecords() {
+  // Check session cache
+  try {
+    const cached = sessionStorage.getItem(CACHE_KEY);
+    if (cached) {
+      const { ts, data } = JSON.parse(cached);
+      if (Date.now() - ts < CACHE_TTL) {
+        data.forEach(r => { if (r.date) r.date = new Date(r.date); });
+        return { records: data, complete: true };
+      }
+    }
+  } catch(e) {}
+
+  // Fast first load
+  const firstPage = await fetchPage(0, 500);
+  const initial = parseFeatures(firstPage.features || []);
+  const exceeded = firstPage.exceededTransferLimit === true;
+  return { records: initial, complete: !exceeded, offset: 500 };
+}
+
+async function fetchRemaining(records, offset, onUpdate) {
+  let currentOffset = offset;
+  let exceeded = true;
+  while (exceeded && currentOffset <= 20000) {
+    const data = await fetchPage(currentOffset, 1000);
+    records = records.concat(parseFeatures(data.features || []));
+    exceeded = data.exceededTransferLimit === true;
+    currentOffset += 1000;
+    const lt = document.getElementById("loadingText");
+    if (lt) lt.textContent = `Loading… ${records.length.toLocaleString()} records`;
+    onUpdate(records);
+  }
+  try {
+    sessionStorage.setItem(CACHE_KEY, JSON.stringify({
+      ts: Date.now(),
+      data: records.map(r => ({ ...r, date: r.date?.toISOString() }))
+    }));
+  } catch(e) {}
+  return records;
+}
+
 // ---------- Utilities ----------
 
 function formatDate(d) {
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  const adj = new Date(d.getTime() + d.getTimezoneOffset() * 60000);
+  return adj.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 function formatShortDate(d) {
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  const adj = new Date(d.getTime() + d.getTimezoneOffset() * 60000);
+  return adj.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
 // ---------- Filter UI ----------
 
 function populateFruitSelect(records) {
   const sel = document.getElementById("filterFruit");
+  const existing = new Set([...sel.options].map(o => o.value));
   [...new Set(records.map(r => r.species))].filter(Boolean).sort().forEach(f => {
-    const o = document.createElement("option");
-    o.value = o.textContent = f;
-    sel.appendChild(o);
+    if (!existing.has(f)) {
+      const o = document.createElement("option");
+      o.value = o.textContent = f;
+      sel.appendChild(o);
+    }
   });
 }
 
 function populateVarietySelect(records, fruit) {
   const sel = document.getElementById("filterVariety");
+  const current = sel.value;
   sel.innerHTML = '<option value="">All varieties</option>';
   const source = fruit ? records.filter(r => r.species === fruit) : records;
   [...new Set(source.map(r => r.variety))].filter(v => v && v !== "Unknown variety").sort()
@@ -104,15 +152,19 @@ function populateVarietySelect(records, fruit) {
       o.value = o.textContent = v;
       sel.appendChild(o);
     });
+  sel.value = current;
 }
 
 function populateYearSelect(records) {
   const sel = document.getElementById("filterYear");
+  const existing = new Set([...sel.options].map(o => o.value));
   const years = [...new Set(records.map(r => r.date.getFullYear()))].sort((a, b) => b - a);
   years.forEach(y => {
-    const o = document.createElement("option");
-    o.value = y; o.textContent = y;
-    sel.appendChild(o);
+    if (!existing.has(String(y))) {
+      const o = document.createElement("option");
+      o.value = y; o.textContent = y;
+      sel.appendChild(o);
+    }
   });
 }
 
@@ -127,78 +179,104 @@ function getFilters() {
 
 function applyFilters(records, filters) {
   return records.filter(r => {
-    if (filters.fruit   && r.species !== filters.fruit)                         return false;
-    if (filters.variety && r.variety !== filters.variety)                       return false;
-    if (filters.year    && r.date.getFullYear() !== parseInt(filters.year))     return false;
-    if (filters.stage   && r.stage !== filters.stage)                           return false;
+    if (filters.fruit   && r.species !== filters.fruit)                     return false;
+    if (filters.variety && r.variety !== filters.variety)                   return false;
+    if (filters.year    && r.date.getFullYear() !== parseInt(filters.year)) return false;
+    if (filters.stage   && r.stage !== filters.stage)                       return false;
     return true;
   });
+}
+
+// ---------- Map expand/collapse ----------
+
+let expandedMap = null;
+let expandedMarkerLayer = null;
+
+function makeClusterGroup() {
+  return L.markerClusterGroup({
+    maxClusterRadius: 50,
+    showCoverageOnHover: false,
+    disableClusteringAtZoom: 10,
+    iconCreateFunction: cluster => {
+      const count = cluster.getChildCount();
+      const size = count < 10 ? 32 : count < 100 ? 38 : 44;
+      return L.divIcon({
+        html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:#2F4A3C;color:#FBF7F0;display:flex;align-items:center;justify-content:center;font-size:${count < 100 ? '0.78' : '0.68'}rem;font-weight:600;border:2px solid rgba(251,247,240,0.6);box-shadow:0 2px 8px rgba(47,74,60,0.35);">${count}</div>`,
+        className: "", iconSize: [size, size], iconAnchor: [size/2, size/2]
+      });
+    }
+  });
+}
+
+function expandMap() {
+  const modal = document.getElementById("mapModal");
+  modal.style.display = "flex";
+  document.body.style.overflow = "hidden";
+
+  if (!expandedMap) {
+    expandedMap = L.map("leafletMapExpanded", { zoomControl: true, maxZoom: 12 })
+      .setView(leafletMap.getCenter(), leafletMap.getZoom());
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
+      attribution: "Tiles © Esri", maxZoom: 12, minZoom: 4
+    }).addTo(expandedMap);
+    expandedMarkerLayer = makeClusterGroup().addTo(expandedMap);
+  }
+
+  expandedMarkerLayer.clearLayers();
+  markerLayer.getLayers().forEach(layer => {
+    if (layer.getLatLng) {
+      const m = L.marker(layer.getLatLng(), { icon: layer.options.icon });
+      if (layer.getTooltip()) m.bindTooltip(layer.getTooltip().getContent(), { direction: "top", offset: [0, -4] });
+      expandedMarkerLayer.addLayer(m);
+    }
+  });
+  setTimeout(() => expandedMap.invalidateSize(), 100);
+}
+
+function collapseMap() {
+  document.getElementById("mapModal").style.display = "none";
+  document.body.style.overflow = "";
 }
 
 // ---------- Leaflet map ----------
 
 function initMap() {
+  if (leafletMap) return;
   leafletMap = L.map("leafletMap", { zoomControl: true, maxZoom: 12 }).setView([54.5, -3], 5);
   L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
-    attribution: 'Tiles © Esri',
-    
-    
-    maxZoom: 12
+    attribution: "Tiles © Esri", maxZoom: 12, minZoom: 4
   }).addTo(leafletMap);
-  markerLayer = L.layerGroup().addTo(leafletMap);
+  markerLayer = makeClusterGroup().addTo(leafletMap);
 }
 
 function markerSvg(color, stage) {
-  const size = 14;
-  const half = size / 2;
-
+  const size = 14, half = 7;
   let shape;
-  if (stage === "Start of Flowering") {
-    // Circle — bud opening
-    shape = `<circle cx="${half}" cy="${half}" r="${half - 1.5}" fill="${color}" stroke="#FBF7F0" stroke-width="1.5"/>`;
-  } else if (stage === "Peak Flowering") {
-    // Diamond — full open
-    shape = `<polygon points="${half},1.5 ${size - 1.5},${half} ${half},${size - 1.5} 1.5,${half}" fill="${color}" stroke="#FBF7F0" stroke-width="1.5"/>`;
-  } else if (stage === "End of Flowering") {
-    // Triangle — closing
-    shape = `<polygon points="${half},1.5 ${size - 1.5},${size - 1.5} 1.5,${size - 1.5}" fill="${color}" stroke="#FBF7F0" stroke-width="1.5"/>`;
-  } else {
-    // Square — unknown
-    shape = `<rect x="1.5" y="1.5" width="${size - 3}" height="${size - 3}" rx="2" fill="${color}" stroke="#FBF7F0" stroke-width="1.5"/>`;
-  }
-
+  if (stage === "Start of Flowering")
+    shape = `<circle cx="${half}" cy="${half}" r="5.5" fill="${color}" stroke="#FBF7F0" stroke-width="1.5"/>`;
+  else if (stage === "Peak Flowering")
+    shape = `<polygon points="${half},1.5 12.5,${half} ${half},12.5 1.5,${half}" fill="${color}" stroke="#FBF7F0" stroke-width="1.5"/>`;
+  else if (stage === "End of Flowering")
+    shape = `<polygon points="${half},1.5 12.5,12.5 1.5,12.5" fill="${color}" stroke="#FBF7F0" stroke-width="1.5"/>`;
+  else
+    shape = `<rect x="1.5" y="1.5" width="11" height="11" rx="2" fill="${color}" stroke="#FBF7F0" stroke-width="1.5"/>`;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${shape}</svg>`;
 }
 
 function updateMap(filtered) {
   markerLayer.clearLayers();
   const tag = document.getElementById("mapTag");
-
-  // Only plot records where variety came from the main list (not free-text other)
-  const mappable = filtered.filter(r => {
-    const speciesCfg = SPECIES_CONFIG.find(s => s.name === r.species);
-    if (!speciesCfg) return r.x && r.y;
-    // If the raw coded value was "other", it's a free-text entry — exclude until reviewed
-    return r._rawVariety !== "other" && r.x && r.y;
-  });
-
+  const mappable = filtered.filter(r => r._rawVariety !== "other" && r.x && r.y);
   tag.textContent = `${mappable.length} record${mappable.length === 1 ? "" : "s"}`;
 
   mappable.forEach(r => {
-    const color = colorFor(r.species);
-    const svg   = markerSvg(color, r.stage);
-
     const icon = L.divIcon({
-      html: svg,
-      className: "",
-      iconSize: [14, 14],
-      iconAnchor: [7, 7]
+      html: markerSvg(colorFor(r.species), r.stage),
+      className: "", iconSize: [14, 14], iconAnchor: [7, 7]
     });
-
     const marker = L.marker([r.y, r.x], { icon });
     marker.bindTooltip(
-      `<strong>${r.species}</strong><br>${r.variety}
-       <br>${r.stage}<br>${formatDate(r.date)}${r.postcode ? "<br>" + r.postcode : ""}`,
+      `<strong>${r.species}</strong><br>${r.variety}<br>${r.stage}<br>${formatDate(r.date)}`,
       { direction: "top", offset: [0, -4] }
     );
     markerLayer.addLayer(marker);
@@ -214,24 +292,20 @@ function renderStats(filtered) {
   document.getElementById("statYearLabel").textContent = `${CURRENT_YEAR} records`;
 
   if (filtered.length) {
-    // Average by day-of-year to avoid cross-year timestamp skew
     const avgDoy = filtered.reduce((s, r) => {
       const start = new Date(r.date.getFullYear(), 0, 0);
       return s + Math.floor((r.date - start) / 86400000);
     }, 0) / filtered.length;
-    // Express as a date in a neutral year
-    const avgDate = new Date(2000, 0, Math.round(avgDoy));
-    document.getElementById("statAvgBloom").textContent = formatShortDate(avgDate);
+    document.getElementById("statAvgBloom").textContent = formatShortDate(new Date(2000, 0, Math.round(avgDoy)));
   } else {
     document.getElementById("statAvgBloom").textContent = "—";
   }
 
-  // Update label to reflect active filters
   const filters = getFilters();
   const labelParts = [];
-  if (filters.stage)   labelParts.push(filters.stage);
-  if (filters.fruit)   labelParts.push(filters.fruit);
-  if (filters.year)    labelParts.push(filters.year);
+  if (filters.stage) labelParts.push(filters.stage);
+  if (filters.fruit) labelParts.push(filters.fruit);
+  if (filters.year)  labelParts.push(filters.year);
   document.getElementById("statAvgBloomLabel").textContent = labelParts.length
     ? `Avg. date — ${labelParts.join(", ")}`
     : "Average date (all records)";
@@ -248,7 +322,6 @@ function renderBreakdown(filtered, filters, allRecords) {
     ? `Varieties of ${filters.fruit} <span class="tag">filtered</span>`
     : `Records by fruit <span class="tag">filtered</span>`;
 
-  // Show/hide nav buttons and update hint
   btnBack.style.display  = filters.variety ? "inline-flex" : "none";
   btnReset.style.display = filters.fruit   ? "inline-flex" : "none";
   const hint = document.getElementById("breakdownHint");
@@ -268,23 +341,16 @@ function renderBreakdown(filtered, filters, allRecords) {
 
   container.innerHTML = entries.map(([key, count]) => {
     const color = groupBy === "species" ? colorFor(key) : colorFor(filters.fruit);
-    const pct   = Math.round((count / max) * 100);
-    const hint  = groupBy === "species"
-      ? "Click to filter by this fruit"
-      : "Click to filter by this variety";
-    return `<div class="bar-row" data-key="${key}" data-group="${groupBy}"
-        style="cursor:pointer;" title="${hint}">
+    return `<div class="bar-row" data-key="${key}" data-group="${groupBy}" style="cursor:pointer;">
       <div class="bar-label" title="${key}">${key}</div>
-      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color}"></div></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${Math.round(count/max*100)}%;background:${color}"></div></div>
       <div class="bar-val">${count}</div>
     </div>`;
   }).join("");
 
-  // Click handler on each bar
   container.querySelectorAll(".bar-row").forEach(row => {
     row.addEventListener("click", () => {
-      const key   = row.dataset.key;
-      const group = row.dataset.group;
+      const key = row.dataset.key, group = row.dataset.group;
       if (group === "species") {
         document.getElementById("filterFruit").value   = key;
         document.getElementById("filterVariety").value = "";
@@ -303,7 +369,6 @@ function renderTable(filtered) {
   const body  = document.getElementById("recordsBody");
   const empty = document.getElementById("recordsEmpty");
   document.getElementById("recordsCountTag").textContent = `${filtered.length} matching`;
-
   if (!filtered.length) { body.innerHTML = ""; empty.style.display = "block"; return; }
   empty.style.display = "none";
   body.innerHTML = filtered.slice(0, 100).map(r => `
@@ -356,11 +421,13 @@ let tlInterval = null;
 
 function populateTlYearSelect(records) {
   const sel = document.getElementById("tlYear");
-  const years = [...new Set(records.map(r => r.date.getFullYear()))].sort((a, b) => b - a);
-  years.forEach(y => {
-    const o = document.createElement("option");
-    o.value = y; o.textContent = y;
-    sel.appendChild(o);
+  const existing = new Set([...sel.options].map(o => o.value));
+  [...new Set(records.map(r => r.date.getFullYear()))].sort((a, b) => b - a).forEach(y => {
+    if (!existing.has(String(y))) {
+      const o = document.createElement("option");
+      o.value = y; o.textContent = y;
+      sel.appendChild(o);
+    }
   });
 }
 
@@ -375,13 +442,10 @@ function stopTimelapse() {
 function startTimelapse(records) {
   const year = parseInt(document.getElementById("tlYear").value);
   if (!year) return;
-
   stopTimelapse();
 
-  // Use main page filters
   const { fruit, variety, stage } = getFilters();
-
-  let yearRecords = records.filter(r => r.date.getFullYear() === year && r.x && r.y);
+  let yearRecords = records.filter(r => r.date.getFullYear() === year && r.x && r.y && r._rawVariety !== "other");
   if (fruit)   yearRecords = yearRecords.filter(r => r.species === fruit);
   if (variety) yearRecords = yearRecords.filter(r => r.variety === variety);
   if (stage)   yearRecords = yearRecords.filter(r => r.stage === stage);
@@ -393,15 +457,11 @@ function startTimelapse(records) {
 
   const sorted = [...yearRecords].sort((a, b) => a.date - b.date);
   const minDay = sorted[0].date;
-  const maxDay = sorted[sorted.length - 1].date;
-  const totalDays = Math.ceil((maxDay - minDay) / 86400000) + 1;
+  const totalDays = Math.ceil((sorted[sorted.length-1].date - minDay) / 86400000) + 1;
 
   const slider = document.getElementById("tlSlider");
-  slider.min = 0;
-  slider.max = totalDays;
-  slider.value = 0;
+  slider.min = 0; slider.max = totalDays; slider.value = 0;
   slider.style.display = "block";
-
   document.getElementById("tlPlay").style.display = "none";
   document.getElementById("tlStop").style.display = "inline-flex";
 
@@ -412,17 +472,9 @@ function startTimelapse(records) {
     const visible = sorted.filter(r => r.date <= cutoff);
     markerLayer.clearLayers();
     visible.forEach(r => {
-      const color = colorFor(r.species);
-      const icon  = L.divIcon({
-        html: markerSvg(color, r.stage),
-        className: "", iconSize: [14, 14], iconAnchor: [7, 7]
-      });
+      const icon = L.divIcon({ html: markerSvg(colorFor(r.species), r.stage), className: "", iconSize: [14, 14], iconAnchor: [7, 7] });
       const marker = L.marker([r.y, r.x], { icon });
-      marker.bindTooltip(
-        `<strong>${r.species}</strong>${r.variety !== "Unknown variety" ? "<br>" + r.variety : ""}
-         <br>${r.stage}<br>${formatDate(r.date)}${r.postcode ? "<br>" + r.postcode : ""}`,
-        { direction: "top", offset: [0, -4] }
-      );
+      marker.bindTooltip(`<strong>${r.species}</strong><br>${r.variety}<br>${r.stage}<br>${formatDate(r.date)}`, { direction: "top", offset: [0, -4] });
       markerLayer.addLayer(marker);
     });
     document.getElementById("tlDateLabel").textContent = formatShortDate(cutoff) + ` (${visible.length} records)`;
@@ -431,18 +483,8 @@ function startTimelapse(records) {
   }
 
   renderDay(0);
-
-  tlInterval = setInterval(() => {
-    day++;
-    renderDay(day);
-    if (day >= totalDays) stopTimelapse();
-  }, 80); // 80ms per day = roughly 6 seconds for a full season
-
-  // Allow manual scrubbing
-  slider.addEventListener("input", () => {
-    if (tlInterval) { clearInterval(tlInterval); tlInterval = null; }
-    renderDay(parseInt(slider.value));
-  });
+  tlInterval = setInterval(() => { day++; renderDay(day); if (day >= totalDays) stopTimelapse(); }, 80);
+  slider.addEventListener("input", () => { if (tlInterval) { clearInterval(tlInterval); tlInterval = null; } renderDay(parseInt(slider.value)); });
 }
 
 // ---------- Year-on-year trend chart ----------
@@ -450,12 +492,10 @@ function startTimelapse(records) {
 let trendChart = null;
 
 function dayOfYear(d) {
-  const start = new Date(d.getFullYear(), 0, 0);
-  return Math.floor((d - start) / 86400000);
+  return Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 86400000);
 }
 
 function doyToDate(doy) {
-  // Express as date in a neutral year
   return new Date(2000, 0, Math.round(doy));
 }
 
@@ -465,72 +505,36 @@ function renderTrendChart(records) {
 
   const datasets = SPECIES_CONFIG.map(sc => {
     const data = years.map(yr => {
-      let subset = records.filter(r =>
-        r.species === sc.name &&
-        r.date.getFullYear() === yr &&
-        r._rawVariety !== "other"
-      );
+      let subset = records.filter(r => r.species === sc.name && r.date.getFullYear() === yr && r._rawVariety !== "other");
       if (stage) subset = subset.filter(r => r.stage === stage);
       if (!subset.length) return null;
-      const avgDoy = subset.reduce((s, r) => s + dayOfYear(r.date), 0) / subset.length;
-      return Math.round(avgDoy);
+      return Math.round(subset.reduce((s, r) => s + dayOfYear(r.date), 0) / subset.length);
     });
-
     return {
-      label: sc.name,
-      data,
-      borderColor: sc.color,
-      backgroundColor: sc.color + "33",
-      pointBackgroundColor: sc.color,
-      pointRadius: 5,
-      pointHoverRadius: 7,
-      tension: 0.3,
-      spanGaps: true
+      label: sc.name, data,
+      borderColor: sc.color, backgroundColor: sc.color + "33",
+      pointBackgroundColor: sc.color, pointRadius: 5, pointHoverRadius: 7,
+      tension: 0.3, spanGaps: true
     };
   }).filter(ds => ds.data.some(d => d !== null));
 
   const ctx = document.getElementById("trendChart").getContext("2d");
-
   if (trendChart) trendChart.destroy();
 
   trendChart = new Chart(ctx, {
     type: "line",
     data: { labels: years, datasets },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
+      responsive: true, maintainAspectRatio: false,
       interaction: { mode: "index", intersect: false },
       plugins: {
-        legend: {
-          position: "bottom",
-          labels: { font: { family: "Inter, sans-serif", size: 12 }, boxWidth: 12, padding: 16 }
-        },
-        tooltip: {
-          callbacks: {
-            label: ctx => {
-              if (ctx.raw === null) return null;
-              const d = doyToDate(ctx.raw);
-              const dateStr = d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-              return `${ctx.dataset.label}: ${dateStr}`;
-            }
-          }
-        }
+        legend: { position: "bottom", labels: { font: { family: "Inter, sans-serif", size: 12 }, boxWidth: 12, padding: 16 } },
+        tooltip: { callbacks: { label: ctx => ctx.raw === null ? null : `${ctx.dataset.label}: ${doyToDate(ctx.raw).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` } }
       },
       scales: {
-        x: {
-          title: { display: true, text: "Year", font: { family: "Inter, sans-serif" } },
-          grid: { color: "rgba(47,74,60,0.06)" },
-          ticks: { font: { family: "var(--mono)", size: 11 } }
-        },
-        y: {
-          reverse: false,
-          title: { display: true, text: "Average flowering date", font: { family: "Inter, sans-serif" } },
-          grid: { color: "rgba(47,74,60,0.06)" },
-          ticks: {
-            font: { family: "var(--mono)", size: 11 },
-            callback: val => doyToDate(val).toLocaleDateString("en-GB", { day: "numeric", month: "short" })
-          }
-        }
+        x: { title: { display: true, text: "Year" }, grid: { color: "rgba(47,74,60,0.06)" }, ticks: { font: { size: 11 } } },
+        y: { title: { display: true, text: "Average flowering date" }, grid: { color: "rgba(47,74,60,0.06)" },
+          ticks: { font: { size: 11 }, callback: val => doyToDate(val).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) } }
       }
     }
   });
@@ -539,8 +543,7 @@ function renderTrendChart(records) {
 function showError(msg) {
   const el = document.getElementById("filterSummary");
   el.textContent = msg; el.style.color = "#c0392b";
-  ["statTotal","statYear","statAvgBloom"].forEach(id =>
-    document.getElementById(id).textContent = "—");
+  ["statTotal","statYear","statAvgBloom"].forEach(id => document.getElementById(id).textContent = "—");
 }
 
 // ---------- Boot ----------
@@ -549,63 +552,86 @@ document.addEventListener("DOMContentLoaded", async () => {
   initMap();
   document.getElementById("filterSummary").textContent = "Loading records…";
 
-  let records;
+  // Modal and Escape key
+  document.getElementById("mapModal").addEventListener("click", e => {
+    if (e.target === document.getElementById("mapModal")) collapseMap();
+  });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") collapseMap(); });
+
+  let result;
   try {
-    records = await fetchRecords();
+    result = await fetchRecords();
   } catch (err) {
     showError(`Could not load data: ${err.message}`);
+    const li = document.getElementById("loadingIndicator");
+    if (li) li.style.display = "none";
     return;
   }
+
+  let records = result.records;
+  let recordsRef = records;
+  function getRecords() { return recordsRef; }
+
+  const li = document.getElementById("loadingIndicator");
+  if (li) li.style.display = "none";
 
   populateFruitSelect(records);
   populateVarietySelect(records, "");
   populateYearSelect(records);
+  populateTlYearSelect(records);
+  renderTrendChart(records);
+  renderAll(records);
 
   document.getElementById("filterFruit").addEventListener("change", e => {
-    populateVarietySelect(records, e.target.value);
-    renderAll(records);
+    populateVarietySelect(getRecords(), e.target.value);
+    renderAll(getRecords());
   });
   ["filterVariety","filterStage"].forEach(id =>
-    document.getElementById(id).addEventListener("change", () => renderAll(records))
+    document.getElementById(id).addEventListener("change", () => renderAll(getRecords()))
   );
   document.getElementById("filterYear").addEventListener("change", () => {
-    // Sync timelapse year to match main filter
-    const yr = document.getElementById("filterYear").value;
-    document.getElementById("tlYear").value = yr;
-    renderAll(records);
+    document.getElementById("tlYear").value = document.getElementById("filterYear").value;
+    renderAll(getRecords());
   });
   document.getElementById("resetFilters").addEventListener("click", () => {
-    ["filterFruit","filterVariety","filterYear","filterStage"].forEach(id =>
-      document.getElementById(id).value = "");
-    populateVarietySelect(records, "");
-    renderAll(records);
+    ["filterFruit","filterVariety","filterYear","filterStage"].forEach(id => document.getElementById(id).value = "");
+    populateVarietySelect(getRecords(), "");
+    renderAll(getRecords());
   });
-
-  // Back: clear variety, keep fruit
   document.getElementById("btnBack").addEventListener("click", () => {
     document.getElementById("filterVariety").value = "";
-    renderAll(records);
+    renderAll(getRecords());
   });
-
-  // Reset: clear fruit and variety, keep year/stage
   document.getElementById("btnReset").addEventListener("click", () => {
-    document.getElementById("filterFruit").value   = "";
-    document.getElementById("filterVariety").value = "";
-    populateVarietySelect(records, "");
-    renderAll(records);
+    document.getElementById("filterFruit").value = document.getElementById("filterVariety").value = "";
+    populateVarietySelect(getRecords(), "");
+    renderAll(getRecords());
   });
+  document.getElementById("tlPlay").addEventListener("click", () => startTimelapse(getRecords()));
+  document.getElementById("tlStop").addEventListener("click", () => { stopTimelapse(); renderAll(getRecords()); });
+  document.getElementById("chartStage").addEventListener("change", () => renderTrendChart(getRecords()));
 
-  // Timelapse
-  populateTlYearSelect(records);
-  document.getElementById("tlPlay").addEventListener("click", () => startTimelapse(records));
-  document.getElementById("tlStop").addEventListener("click", () => {
-    stopTimelapse();
-    renderAll(records);
-  });
+  if (!result.complete) {
+    const loadingIndicator = document.getElementById("loadingIndicator");
+    const loadingText = document.getElementById("loadingText");
+    if (loadingIndicator) { loadingIndicator.style.display = "flex"; }
+    if (loadingText) loadingText.textContent = `Loading more… ${records.length.toLocaleString()} records so far`;
 
-  // Trend chart
-  renderTrendChart(records);
-  document.getElementById("chartStage").addEventListener("change", () => renderTrendChart(records));
-
-  renderAll(records);
+    try {
+      records = await fetchRemaining(records, result.offset, updated => {
+        recordsRef = updated;
+        populateFruitSelect(updated);
+        populateVarietySelect(updated, document.getElementById("filterFruit").value);
+        populateYearSelect(updated);
+        populateTlYearSelect(updated);
+        renderAll(updated);
+      });
+      recordsRef = records;
+      renderAll(records);
+      renderTrendChart(records);
+    } catch(e) {
+      console.warn("Background load failed:", e);
+    }
+    if (loadingIndicator) loadingIndicator.style.display = "none";
+  }
 });
